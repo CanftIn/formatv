@@ -51,6 +51,98 @@ class StreamOperatorFormatAdapter : public FormatAdapter {
   T item_;
 };
 
+template <typename T>
+class MissingFormatAdapter;
+
+template <typename T, T>
+struct SameType;
+
+// FormatProvider should have the signature:
+//   static void format(const T&, raw_stream &, StringRef);
+template <class T>
+class HasFormatProvider {
+ public:
+  using Decayed = std::decay_t<T>;
+  using SignatureFormat = void (*)(const Decayed&, std::ostream&, std::string);
+
+  template <typename U>
+  static auto test(SameType<SignatureFormat, &U::format>*) -> char;
+
+  template <typename U>
+  static auto test(...) -> double;
+
+  static constexpr bool const Value =
+      (sizeof(test<FormatProvider<Decayed>>(nullptr)) == 1);
+};
+
+template <class T>
+class HasStreamOperator {
+ public:
+  using ConstRefT = const std::decay_t<T>&;
+
+  template <typename U>
+  static auto test(
+      std::enable_if_t<std::is_same_v<decltype(std::declval<std::ostream&>()
+                                               << std::declval<U>()),
+                                      std::ostream&>,
+                       int*>) -> char;
+
+  template <typename U>
+  static auto test(...) -> double;
+
+  static constexpr bool const Value = (sizeof(test<ConstRefT>(nullptr)) == 1);
+};
+
+template <typename T>
+struct UsesFormatMember
+    : public std::integral_constant<
+          bool, std::is_base_of_v<FormatAdapter, std::remove_reference_t<T>>> {
+};
+
+template <typename T>
+struct UsesFormatProvider
+    : public std::integral_constant<bool, !UsesFormatMember<T>::value &&
+                                              HasFormatProvider<T>::Value> {};
+
+template <typename T>
+struct UsesStreamOperator
+    : public std::integral_constant<bool, !UsesFormatMember<T>::value &&
+                                              !UsesFormatProvider<T>::value &&
+                                              HasStreamOperator<T>::Value> {};
+
+template <typename T>
+struct UsesMissingProvider
+    : public std::integral_constant<bool, !UsesFormatMember<T>::value &&
+                                              !UsesFormatProvider<T>::value &&
+                                              !HasStreamOperator<T>::Value> {};
+
+template <typename T>
+auto build_format_adapter(T&& item)
+    -> std::enable_if_t<UsesFormatMember<T>::value, T> {
+  return std::forward<T>(item);
+}
+
+template <typename T>
+auto build_format_adapter(T&& item)
+    -> std::enable_if_t<UsesFormatProvider<T>::value,
+                        ProviderFormatAdapter<T>> {
+  return ProviderFormatAdapter<T>(std::forward<T>(item));
+}
+
+template <typename T>
+auto build_format_adapter(T&& item)
+    -> std::enable_if_t<UsesStreamOperator<T>::value,
+                        StreamOperatorFormatAdapter<T>> {
+  return StreamOperatorFormatAdapter<T>(std::forward<T>(item));
+}
+
+template <typename T>
+auto build_format_adapter(T&& item)
+    -> std::enable_if_t<UsesMissingProvider<T>::value,
+                        MissingFormatAdapter<T>> {
+  return MissingFormatAdapter<T>(std::forward<T>(item));
+}
+
 }  // namespace Internal
 
 }  // namespace Formatv
