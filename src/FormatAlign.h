@@ -8,9 +8,9 @@
 namespace Formatv {
 
 enum class AlignStyle : uint8_t {
-  Left,
-  Center,
-  Right,
+  Left,    // "-"
+  Center,  // "="
+  Right,   // "+"
 };
 
 struct FormatAlign {

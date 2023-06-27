@@ -21,7 +21,7 @@ class FormatAdapter {
   virtual ~FormatAdapter() = default;
 
  private:
-  virtual void anchor();
+  virtual void anchor() {}
 };
 
 template <typename T>
