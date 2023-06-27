@@ -24,6 +24,10 @@ void test_formatv_parse() {
   std::cout << Formatv::formatv("{0}", "Test").str() << '\n';
   std::cout << Formatv::formatv("{0}", std::string("Test2")).str() << '\n';
   std::cout << Formatv::formatv("{0} {1}", 1234.412, "test").str() << '\n';
+
+  std::cout << Formatv::formatv("{0:N}", 1234567890).str() << '\n';
+
+  std::cout << Formatv::formatv("{0,=+5}", 123).str() << '\n';
 }
 
 auto main() -> int {

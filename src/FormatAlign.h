@@ -28,10 +28,12 @@ struct FormatAlign {
       adapter_.format(os, options);
       return;
     }
-    std::string item;
-    std::ostringstream stream(item);
+
+    std::ostringstream stream;
 
     adapter_.format(stream, options);
+
+    std::string item = stream.str();
     if (amount_ <= item.size()) {
       os << item;
       return;

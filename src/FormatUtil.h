@@ -3,6 +3,7 @@
 
 #include <array>
 #include <cassert>
+#include <cctype>
 #include <functional>
 #include <initializer_list>
 #include <iterator>
@@ -47,39 +48,108 @@ class FormatUtil {
     return rtrim(ltrim(str, chars), chars);
   }
 
-  template <typename T>
-  static auto ConsumeInteger(std::string& str, int radix, T& out_value)
-      -> bool {
-    std::size_t pos = 0;
+  static auto GetAutoSenseRadix(std::string& str) -> unsigned {
+    if (str.empty()) {
+      return 10;
+    }
 
-    try {
-      if constexpr (std::numeric_limits<T>::is_signed) {
-        long long val = std::stoll(str, &pos, radix);
+    if (str[0] == '0' && str.size() > 1 && std::isdigit(str[1])) {
+      str = str.substr(1);
+      return 8;
+    }
 
-        if (val < std::numeric_limits<T>::min() ||
-            val > std::numeric_limits<T>::max()) {
-          return false;
-        }
+    return 10;
+  }
 
-        out_value = static_cast<T>(val);
+  static auto consumeUnsignedInteger(std::string& str, unsigned radix,
+                                     unsigned long long& result) -> bool {
+    if (radix == 0) {
+      radix = GetAutoSenseRadix(str);
+    }
+
+    if (str.empty()) {
+      return true;
+    }
+
+    std::string str2 = str;
+    result = 0;
+    while (!str2.empty()) {
+      unsigned char_val;
+      if (str2[0] >= '0' && str2[0] <= '9') {
+        char_val = str2[0] - '0';
+      } else if (str2[0] >= 'a' && str2[0] <= 'z') {
+        char_val = str2[0] - 'a' + 10;
+      } else if (str2[0] >= 'A' && str2[0] <= 'Z') {
+        char_val = str2[0] - 'A' + 10;
       } else {
-        unsigned long long val = std::stoull(str, &pos, radix);
-
-        if (val > std::numeric_limits<T>::max()) {
-          return false;
-        }
-
-        out_value = static_cast<T>(val);
+        break;
       }
 
-      str = drop_front(str, pos);
+      if (char_val >= radix) {
+        break;
+      }
 
-      return pos == str.length();
-    } catch (const std::invalid_argument& e) {
-      return false;
-    } catch (const std::out_of_range& e) {
+      unsigned long long prev_result = result;
+      result = result * radix + char_val;
+
+      if (result / radix < prev_result) {
+        return true;
+      }
+
+      str2 = str2.substr(1);
+    }
+
+    if (str.size() == str2.size()) {
+      return true;
+    }
+
+    str = str2;
+    return false;
+  }
+
+  static auto consumeSignedInteger(std::string& str, unsigned radix,
+                                   long long& result) -> bool {
+    unsigned long long ull_val;
+
+    if (str.empty() || str.front() != '-') {
+      if (consumeUnsignedInteger(str, radix, ull_val) ||
+          static_cast<long long>(ull_val) < 0) {
+        return true;
+      }
+      result = ull_val;
       return false;
     }
+
+    std::string str2 = drop_front(str, 1);
+    if (consumeUnsignedInteger(str2, radix, ull_val) ||
+        static_cast<long long>(-ull_val) > 0) {
+      return true;
+    }
+
+    str = str2;
+    result = -ull_val;
+    return false;
+  }
+
+  template <typename T>
+  static auto ConsumeInteger(std::string& str, unsigned radix, T& result)
+      -> bool {
+    if constexpr (std::numeric_limits<T>::is_signed) {
+      long long ll_val;
+      if (consumeSignedInteger(str, radix, ll_val) ||
+          static_cast<long long>(static_cast<T>(ll_val)) != ll_val) {
+        return true;
+      }
+      result = ll_val;
+    } else {
+      unsigned long long ull_val;
+      if (consumeUnsignedInteger(str, radix, ull_val) ||
+          static_cast<unsigned long long>(static_cast<T>(ull_val)) != ull_val) {
+        return true;
+      }
+      result = ull_val;
+    }
+    return false;
   }
 
   static auto take_while(const std::string& str, std::function<bool(char)> f)
