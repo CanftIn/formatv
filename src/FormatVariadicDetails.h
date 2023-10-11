@@ -8,11 +8,14 @@
 
 namespace Formatv {
 
+// 这是一个模板结构，充当自定义的格式提供者。
+// 用户应该为特定的类型特化这个模板以提供格式化功能。
 template <typename T, typename Enable = void>
 struct FormatProvider {};
 
 namespace Internal {
 
+// 它是一个抽象基类，定义了一个纯虚函数format。所有适配器类都需要继承这个基类并实现这个函数。
 class FormatAdapter {
  public:
   virtual void format(std::ostream& os, std::string options) = 0;
@@ -24,6 +27,11 @@ class FormatAdapter {
   virtual void anchor() {}
 };
 
+// ProviderFormatAdapter 和 StreamOperatorFormatAdapter 类: 
+// 这两个类都是FormatAdapter的具体子类。
+//
+// ProviderFormatAdapter使用FormatProvider为特定类型进行格式化，
+// 而StreamOperatorFormatAdapter则使用流插入运算符(<<)为类型进行格式化。
 template <typename T>
 class ProviderFormatAdapter : public FormatAdapter {
  public:
@@ -57,6 +65,8 @@ class MissingFormatAdapter;
 template <typename T, T>
 struct SameType;
 
+// HasFormatProvider 和 HasStreamOperator 类:
+// 这两个模板结构用于检查一个给定的类型是否有与FormatProvider或流插入运算符相关的格式化功能。
 // FormatProvider should have the signature:
 //   static void format(const T&, raw_stream &, StringRef);
 template <class T>
@@ -93,6 +103,8 @@ class HasStreamOperator {
   static constexpr bool const Value = (sizeof(test<ConstRefT>(nullptr)) == 1);
 };
 
+// Uses* 结构:
+// 这些结构根据上面的检查，决定哪种适配器应该用于给定的类型。
 template <typename T>
 struct UsesFormatMember
     : public std::integral_constant<
@@ -116,6 +128,10 @@ struct UsesMissingProvider
                                               !UsesFormatProvider<T>::value &&
                                               !HasStreamOperator<T>::Value> {};
 
+// build_format_adapter 函数模板:
+// 这是一个函数模板的重载集合，根据对象的类型选择合适的格式适配器，
+// 并将对象传递给适配器进行格式化。它使用SFINAE来选择适当的重载版本，
+// 根据对象是否满足不同的格式化要求。
 template <typename T>
 auto build_format_adapter(T&& item)
     -> std::enable_if_t<UsesFormatMember<T>::value, T> {
